@@ -1,4 +1,4 @@
--- Nscripts - Roblox UI Library for Executors
+-- Nscripts - Enhanced Roblox UI Library for Executors
 
 local Nscripts = {}
 Nscripts.__index = Nscripts
@@ -6,12 +6,18 @@ Nscripts.__index = Nscripts
 -- Default Theme
 Nscripts.defaultTheme = {
     textColor = Color3.new(1, 1, 1),
-    backgroundColor = Color3.new(0.2, 0.2, 0.2),
-    buttonColor = Color3.new(0.3, 0.3, 0.3),
+    backgroundColor = Color3.new(0.1, 0.1, 0.1),
+    buttonColor = Color3.new(0.2, 0.2, 0.2),
+    buttonHoverColor = Color3.new(0.3, 0.3, 0.3),
     toggleOnColor = Color3.new(0, 1, 0),
     toggleOffColor = Color3.new(1, 0, 0),
+    sliderColor = Color3.new(0.4, 0.4, 0.4),
     font = Enum.Font.SourceSans,
-    textSize = 14
+    textSize = 16,
+    padding = 10,
+    backgroundColorTransparent = Color3.fromRGB(0, 0, 0, 200),  -- Semi-transparent background
+    loadingTextColor = Color3.new(1, 1, 1),
+    loadingBackgroundColor = Color3.new(0.1, 0.1, 0.1)
 }
 
 -- Create new Nscripts instance
@@ -19,14 +25,114 @@ function Nscripts.new(theme)
     local self = setmetatable({}, Nscripts)
     self.objects = {}
     self.theme = theme or Nscripts.defaultTheme
+
+    -- Main GUI elements
     self.screenGui = Instance.new("ScreenGui")
     self.screenGui.Name = "NscriptsExecutorGUI"
     self.screenGui.ResetOnSpawn = false
     self.screenGui.Parent = game.CoreGui  -- Attach to CoreGui
+
+    -- Loading Screen
+    self.loadingFrame = Instance.new("Frame")
+    self.loadingFrame.Size = UDim2.new(1, 0, 1, 0)
+    self.loadingFrame.Position = UDim2.new(0, 0, 0, 0)
+    self.loadingFrame.BackgroundColor3 = self.theme.loadingBackgroundColor
+    self.loadingFrame.Parent = self.screenGui
+
+    self.loadingLabel = Instance.new("TextLabel")
+    self.loadingLabel.Size = UDim2.new(1, 0, 1, 0)
+    self.loadingLabel.Position = UDim2.new(0, 0, 0, 0)
+    self.loadingLabel.BackgroundTransparency = 1
+    self.loadingLabel.Text = "Loading Nscripts..."
+    self.loadingLabel.TextColor3 = self.theme.loadingTextColor
+    self.loadingLabel.Font = self.theme.font
+    self.loadingLabel.TextSize = self.theme.textSize
+    self.loadingLabel.TextStrokeTransparency = 0.8
+    self.loadingLabel.TextScaled = true
+    self.loadingLabel.Parent = self.loadingFrame
+
+    -- Create the main frame
+    self.mainFrame = Instance.new("Frame")
+    self.mainFrame.Size = UDim2.new(0, 400, 0, 300)
+    self.mainFrame.Position = UDim2.new(0.5, -200, 0.5, -150)  -- Centered on screen
+    self.mainFrame.BackgroundColor3 = self.theme.backgroundColor
+    self.mainFrame.BackgroundTransparency = 0.2  -- Slight transparency for background
+    self.mainFrame.Parent = self.screenGui
+
+    -- Title bar
+    self.titleBar = Instance.new("TextLabel")
+    self.titleBar.Size = UDim2.new(1, 0, 0, 30)
+    self.titleBar.Position = UDim2.new(0, 0, 0, 0)
+    self.titleBar.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
+    self.titleBar.Text = "Nscripts GUI"
+    self.titleBar.TextColor3 = self.theme.textColor
+    self.titleBar.Font = self.theme.font
+    self.titleBar.TextSize = self.theme.textSize
+    self.titleBar.TextStrokeTransparency = 0.8
+    self.titleBar.Parent = self.mainFrame
+
+    -- Make frame draggable
+    self:makeDraggable(self.mainFrame)
+
+    -- Start loading animation
+    self:loadingAnimation()
+
     self.layoutMode = "vertical"
     self.spacing = 10
-    self.nextPosition = UDim2.new(0, 10, 0, 10)
+    self.nextPosition = UDim2.new(0, self.theme.padding, 0, self.titleBar.Size.Y.Offset + self.theme.padding)
+
     return self
+end
+
+-- Make UI element draggable
+function Nscripts:makeDraggable(frame)
+    local dragging = false
+    local dragStart = Vector3.new()
+    local startPos = UDim2.new()
+
+    local function update(input)
+        if dragging then
+            local delta = input.Position - dragStart
+            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end
+
+    frame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+
+    game:GetService("UserInputService").InputChanged:Connect(update)
+end
+
+-- Display loading animation
+function Nscripts:loadingAnimation()
+    local startTime = tick()
+    local duration = 2  -- Duration of the loading animation in seconds
+
+    local function update()
+        local elapsed = tick() - startTime
+        if elapsed > duration then
+            self.loadingFrame:Destroy()
+            return
+        end
+
+        -- You can add any additional loading animation effects here
+        self.loadingLabel.Text = "Loading Nscripts" .. string.rep(".", math.floor(elapsed * 2) % 4)
+    end
+
+    while self.loadingFrame and self.loadingFrame.Parent do
+        update()
+        wait(0.1)
+    end
 end
 
 -- Set layout mode (vertical or horizontal)
@@ -53,7 +159,8 @@ function Nscripts:createLabel(text, size)
     label.BackgroundColor3 = self.theme.backgroundColor
     label.Font = self.theme.font
     label.TextSize = self.theme.textSize
-    label.Parent = self.screenGui
+    label.TextStrokeTransparency = 0.8
+    label.Parent = self.mainFrame
 
     table.insert(self.objects, label)
     self:updateNextPosition(size)
@@ -70,7 +177,8 @@ function Nscripts:createToggle(size, callback)
     button.TextColor3 = self.theme.textColor
     button.Font = self.theme.font
     button.TextSize = self.theme.textSize
-    button.Parent = self.screenGui
+    button.TextStrokeTransparency = 0.8
+    button.Parent = self.mainFrame
 
     local toggled = false
 
@@ -79,6 +187,14 @@ function Nscripts:createToggle(size, callback)
         button.Text = toggled and "ON" or "OFF"
         button.BackgroundColor3 = toggled and self.theme.toggleOnColor or self.theme.toggleOffColor
         callback(toggled)
+    end)
+
+    button.MouseEnter:Connect(function()
+        button.BackgroundColor3 = self.theme.buttonHoverColor
+    end)
+
+    button.MouseLeave:Connect(function()
+        button.BackgroundColor3 = toggled and self.theme.toggleOnColor or self.theme.toggleOffColor
     end)
 
     table.insert(self.objects, button)
@@ -92,12 +208,12 @@ function Nscripts:createSlider(size, min, max, step, callback)
     slider.Size = size
     slider.Position = self.nextPosition
     slider.BackgroundColor3 = self.theme.backgroundColor
-    slider.Parent = self.screenGui
+    slider.Parent = self.mainFrame
 
     local handle = Instance.new("TextButton")
     handle.Size = UDim2.new(0, 10, 1, 0)
     handle.Position = UDim2.new(0, 0, 0, 0)
-    handle.BackgroundColor3 = self.theme.buttonColor
+    handle.BackgroundColor3 = self.theme.sliderColor
     handle.Text = ""
     handle.Parent = slider
 
@@ -147,7 +263,8 @@ function Nscripts:createDropdown(size, options, callback)
     dropdown.BackgroundColor3 = self.theme.backgroundColor
     dropdown.Font = self.theme.font
     dropdown.TextSize = self.theme.textSize
-    dropdown.Parent = self.screenGui
+    dropdown.TextStrokeTransparency = 0.8
+    dropdown.Parent = self.mainFrame
 
     local dropdownFrame = Instance.new("Frame")
     dropdownFrame.Size = UDim2.new(1, 0, 0, #options * size.Y.Offset)
@@ -164,7 +281,7 @@ function Nscripts:createDropdown(size, options, callback)
         optionButton.BackgroundColor3 = self.theme.backgroundColor
         optionButton.Font = self.theme.font
         optionButton.TextSize = self.theme.textSize
-
+        optionButton.TextStrokeTransparency = 0.8
         optionButton.MouseButton1Click:Connect(function()
             dropdown.Text = option
             dropdownFrame.Visible = false
@@ -179,13 +296,6 @@ function Nscripts:createDropdown(size, options, callback)
     table.insert(self.objects, dropdown)
     self:updateNextPosition(size)
     return dropdown
-end
-
--- Clean up the UI
-function Nscripts:destroy()
-    for _, obj in ipairs(self.objects) do
-        obj:Destroy()
-    end
 end
 
 return Nscripts
