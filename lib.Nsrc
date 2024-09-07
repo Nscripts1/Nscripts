@@ -1,1 +1,204 @@
+-- Nscripts - Roblox UI Library for Executors
 
+local Nscripts = {}
+Nscripts.__index = Nscripts
+
+-- Default Theme
+Nscripts.defaultTheme = {
+    textColor = Color3.new(1, 1, 1),
+    backgroundColor = Color3.new(0.2, 0.2, 0.2),
+    buttonColor = Color3.new(0.3, 0.3, 0.3),
+    toggleOnColor = Color3.new(0, 1, 0),
+    toggleOffColor = Color3.new(1, 0, 0),
+    font = Enum.Font.SourceSans,
+    textSize = 14
+}
+
+-- Create new Nscripts instance
+function Nscripts.new(screenGui, theme)
+    local self = setmetatable({}, Nscripts)
+    self.objects = {}
+    self.theme = theme or Nscripts.defaultTheme
+    self.screenGui = screenGui or Nscripts:createExecutorScreenGui()
+    self.layoutMode = "vertical"
+    self.spacing = 10
+    self.nextPosition = UDim2.new(0, 10, 0, 10)
+    return self
+end
+
+-- Create ScreenGui for executors using gethui or fallback to CoreGui
+function Nscripts:createExecutorScreenGui()
+    local success, gethui = pcall(function() return gethui() end)
+    local screenGui
+
+    if success and gethui then
+        screenGui = Instance.new("ScreenGui", gethui())
+    else
+        screenGui = Instance.new("ScreenGui", game.CoreGui)
+    end
+
+    screenGui.Name = "NscriptsExecutorGUI"
+    screenGui.ResetOnSpawn = false
+    return screenGui
+end
+
+-- Set layout mode (vertical or horizontal)
+function Nscripts:setLayoutMode(mode)
+    self.layoutMode = mode or "vertical"
+end
+
+-- Update the position of the next UI element
+function Nscripts:updateNextPosition(size)
+    if self.layoutMode == "vertical" then
+        self.nextPosition = UDim2.new(self.nextPosition.X, UDim.new(0, self.nextPosition.Y.Offset + size.Y.Offset + self.spacing))
+    else
+        self.nextPosition = UDim2.new(self.nextPosition.X.Scale, self.nextPosition.X.Offset + size.X.Offset + self.spacing, self.nextPosition.Y.Scale, self.nextPosition.Y.Offset)
+    end
+end
+
+-- Create a label
+function Nscripts:createLabel(text, size)
+    local label = Instance.new("TextLabel")
+    label.Size = size
+    label.Position = self.nextPosition
+    label.Text = text
+    label.TextColor3 = self.theme.textColor
+    label.BackgroundColor3 = self.theme.backgroundColor
+    label.Font = self.theme.font
+    label.TextSize = self.theme.textSize
+    label.Parent = self.screenGui
+
+    table.insert(self.objects, label)
+    self:updateNextPosition(size)
+    return label
+end
+
+-- Create a toggle button
+function Nscripts:createToggle(size, callback)
+    local button = Instance.new("TextButton")
+    button.Size = size
+    button.Position = self.nextPosition
+    button.BackgroundColor3 = self.theme.toggleOffColor
+    button.Text = "OFF"
+    button.TextColor3 = self.theme.textColor
+    button.Font = self.theme.font
+    button.TextSize = self.theme.textSize
+    button.Parent = self.screenGui
+
+    local toggled = false
+
+    button.MouseButton1Click:Connect(function()
+        toggled = not toggled
+        button.Text = toggled and "ON" or "OFF"
+        button.BackgroundColor3 = toggled and self.theme.toggleOnColor or self.theme.toggleOffColor
+        callback(toggled)
+    end)
+
+    table.insert(self.objects, button)
+    self:updateNextPosition(size)
+    return button
+end
+
+-- Create a slider
+function Nscripts:createSlider(size, min, max, step, callback)
+    local slider = Instance.new("Frame")
+    slider.Size = size
+    slider.Position = self.nextPosition
+    slider.BackgroundColor3 = self.theme.backgroundColor
+    slider.Parent = self.screenGui
+
+    local handle = Instance.new("TextButton")
+    handle.Size = UDim2.new(0, 10, 1, 0)
+    handle.Position = UDim2.new(0, 0, 0, 0)
+    handle.BackgroundColor3 = self.theme.buttonColor
+    handle.Text = ""
+    handle.Parent = slider
+
+    local currentValue = min
+
+    handle.MouseButton1Down:Connect(function()
+        local moving = true
+
+        local function move(input)
+            local posX = math.clamp(input.Position.X - slider.AbsolutePosition.X, 0, size.X.Offset)
+            handle.Position = UDim2.new(0, posX, 0, 0)
+
+            local newValue = math.floor((posX / size.X.Offset) * (max - min) / step + 0.5) * step + min
+            if newValue ~= currentValue then
+                currentValue = newValue
+                callback(currentValue)
+            end
+        end
+
+        move(game:GetService("UserInputService"):GetMouseLocation())
+        local conn = game:GetService("UserInputService").InputChanged:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseMovement then
+                move(input)
+            end
+        end)
+
+        game:GetService("UserInputService").InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                conn:Disconnect()
+                moving = false
+            end
+        end)
+    end)
+
+    table.insert(self.objects, slider)
+    self:updateNextPosition(size)
+    return slider
+end
+
+-- Create a dropdown
+function Nscripts:createDropdown(size, options, callback)
+    local dropdown = Instance.new("TextButton")
+    dropdown.Size = size
+    dropdown.Position = self.nextPosition
+    dropdown.Text = "Select an option"
+    dropdown.TextColor3 = self.theme.textColor
+    dropdown.BackgroundColor3 = self.theme.backgroundColor
+    dropdown.Font = self.theme.font
+    dropdown.TextSize = self.theme.textSize
+    dropdown.Parent = self.screenGui
+
+    local dropdownFrame = Instance.new("Frame")
+    dropdownFrame.Size = UDim2.new(1, 0, 0, #options * size.Y.Offset)
+    dropdownFrame.Position = UDim2.new(0, 0, 1, 0)
+    dropdownFrame.BackgroundColor3 = self.theme.backgroundColor
+    dropdownFrame.Visible = false
+    dropdownFrame.Parent = dropdown
+
+    for _, option in ipairs(options) do
+        local optionButton = Instance.new("TextButton", dropdownFrame)
+        optionButton.Size = size
+        optionButton.Text = option
+        optionButton.TextColor3 = self.theme.textColor
+        optionButton.BackgroundColor3 = self.theme.backgroundColor
+        optionButton.Font = self.theme.font
+        optionButton.TextSize = self.theme.textSize
+
+        optionButton.MouseButton1Click:Connect(function()
+            dropdown.Text = option
+            dropdownFrame.Visible = false
+            callback(option)
+        end)
+    end
+
+    dropdown.MouseButton1Click:Connect(function()
+        dropdownFrame.Visible = not dropdownFrame.Visible
+    end)
+
+    table.insert(self.objects, dropdown)
+    self:updateNextPosition(size)
+    return dropdown
+end
+
+-- Clean up the UI
+function Nscripts:destroy()
+    for _, obj in ipairs(self.objects) do
+        obj:Destroy()
+    end
+end
+
+return Nscripts
