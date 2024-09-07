@@ -15,31 +15,18 @@ Nscripts.defaultTheme = {
 }
 
 -- Create new Nscripts instance
-function Nscripts.new(screenGui, theme)
+function Nscripts.new(theme)
     local self = setmetatable({}, Nscripts)
     self.objects = {}
     self.theme = theme or Nscripts.defaultTheme
-    self.screenGui = screenGui or Nscripts:createExecutorScreenGui()
+    self.screenGui = Instance.new("ScreenGui")
+    self.screenGui.Name = "NscriptsExecutorGUI"
+    self.screenGui.ResetOnSpawn = false
+    self.screenGui.Parent = game.CoreGui  -- Attach to CoreGui
     self.layoutMode = "vertical"
     self.spacing = 10
     self.nextPosition = UDim2.new(0, 10, 0, 10)
     return self
-end
-
--- Create ScreenGui for executors using gethui or fallback to CoreGui
-function Nscripts:createExecutorScreenGui()
-    local success, gethui = pcall(function() return gethui() end)
-    local screenGui
-
-    if success and gethui then
-        screenGui = Instance.new("ScreenGui", gethui())
-    else
-        screenGui = Instance.new("ScreenGui", game.CoreGui)
-    end
-
-    screenGui.Name = "NscriptsExecutorGUI"
-    screenGui.ResetOnSpawn = false
-    return screenGui
 end
 
 -- Set layout mode (vertical or horizontal)
