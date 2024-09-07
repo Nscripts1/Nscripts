@@ -1,280 +1,275 @@
-local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
-local CoreGui = game:GetService("CoreGui")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local LocalPlayer = game:GetService("Players").LocalPlayer
 local HttpService = game:GetService("HttpService")
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
 
-local Nscripts = {}
-Nscripts.__index = Nscripts
-
--- Default theme
-local defaultTheme = {
-    mainBackgroundColor = Color3.fromRGB(25, 25, 25),
-    buttonColor = Color3.fromRGB(32, 32, 32),
-    buttonHoverColor = Color3.fromRGB(60, 60, 60),
-    sliderColor = Color3.fromRGB(40, 40, 40),
-    sliderHandleColor = Color3.fromRGB(80, 80, 80),
-    switchColor = Color3.fromRGB(32, 32, 32),
-    switchSliderColor = Color3.fromRGB(80, 80, 80),
-    switchSliderOnColor = Color3.fromRGB(0, 200, 0),
-    textColor = Color3.fromRGB(240, 240, 240),
-    font = Enum.Font.Gotham,
-    textSize = 14
+local NscriptsLib = {
+    Elements = {},
+    ThemeObjects = {},
+    Connections = {},
+    Flags = {},
+    Themes = {
+        Default = {
+            Main = Color3.fromRGB(25, 25, 25),
+            Second = Color3.fromRGB(32, 32, 32),
+            Stroke = Color3.fromRGB(60, 60, 60),
+            Divider = Color3.fromRGB(60, 60, 60),
+            Text = Color3.fromRGB(240, 240, 240),
+            TextDark = Color3.fromRGB(150, 150, 150)
+        }
+    },
+    SelectedTheme = "Default",
+    Folder = nil,
+    SaveCfg = false
 }
 
-function Nscripts.new(theme)
-    local self = setmetatable({}, Nscripts)
-    self.theme = theme or defaultTheme
-    self.objects = {}
-    self.nextPosition = UDim2.new(0, 10, 0, 10)
-    
-    self:init()
-    
-    return self
-end
-
--- Initialize the main GUI
-function Nscripts:init()
-    self.screenGui = Instance.new("ScreenGui")
-    self.screenGui.Name = "Nscripts"
-    self.screenGui.Parent = CoreGui
-
-    self.mainFrame = Instance.new("Frame")
-    self.mainFrame.Size = UDim2.new(0, 400, 0, 300)
-    self.mainFrame.Position = UDim2.new(0.5, -200, 0.5, -150)
-    self.mainFrame.BackgroundColor3 = self.theme.mainBackgroundColor
-    self.mainFrame.BorderSizePixel = 0
-    self.mainFrame.Parent = self.screenGui
-
-    -- Add draggable functionality
-    self:makeDraggable(self.mainFrame)
-
-    -- Create loading animation
-    self:createLoadingAnimation()
-end
-
--- Create loading animation
-function Nscripts:createLoadingAnimation()
-    local loadingFrame = Instance.new("Frame")
-    loadingFrame.Size = UDim2.new(1, 0, 1, 0)
-    loadingFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-    loadingFrame.BorderSizePixel = 0
-    loadingFrame.Parent = self.screenGui
-    
-    local textLabel = Instance.new("TextLabel")
-    textLabel.Size = UDim2.new(1, 0, 1, 0)
-    textLabel.BackgroundTransparency = 1
-    textLabel.Text = "Loading Nscripts Library..."
-    textLabel.TextColor3 = self.theme.textColor
-    textLabel.TextSize = 24
-    textLabel.Font = self.theme.font
-    textLabel.Parent = loadingFrame
-    
-    -- Add a simple tweening animation for loading effect
-    local tweenInfo = TweenInfo.new(1, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1, true)
-    local tween = TweenService:Create(textLabel, tweenInfo, {TextStrokeTransparency = 0})
-    tween:Play()
-    
-    -- Remove loading frame after a short delay
-    task.wait(2)
-    loadingFrame:Destroy()
-end
-
--- Make a GUI element draggable
-function Nscripts:makeDraggable(frame)
-    local dragging = false
-    local dragInput, startPos, startPosFrame
-
-    local function updatePosition(input)
-        if dragging then
-            local delta = input.Position - dragInput.Position
-            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        end
+-- Helper function to create UI elements
+local function Create(Name, Properties, Children)
+    local Object = Instance.new(Name)
+    for i, v in next, Properties or {} do
+        Object[i] = v
     end
-
-    frame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-            dragInput = input
-            startPos = frame.Position
-            startPosFrame = input.Position
-
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
-            end)
-        end
-    end)
-
-    UserInputService.InputChanged:Connect(updatePosition)
-end
-
--- Create a label
-function Nscripts:createLabel(text, size)
-    local label = Instance.new("TextLabel")
-    label.Size = size
-    label.Position = self.nextPosition
-    label.Text = text
-    label.TextColor3 = self.theme.textColor
-    label.BackgroundTransparency = 1
-    label.Font = self.theme.font
-    label.TextSize = self.theme.textSize
-    label.TextStrokeTransparency = 0.8
-    label.Parent = self.mainFrame
-    
-    table.insert(self.objects, label)
-    self:updateNextPosition(size)
-    return label
-end
-
--- Create a toggle button
-function Nscripts:createToggle(size, callback)
-    local container = Instance.new("Frame")
-    container.Size = size
-    container.Position = self.nextPosition
-    container.BackgroundColor3 = self.theme.buttonColor
-    container.BorderSizePixel = 0
-    container.Parent = self.mainFrame
-
-    local switch = Instance.new("Frame")
-    switch.Size = UDim2.new(1, -10, 1, -10)
-    switch.Position = UDim2.new(0, 5, 0, 5)
-    switch.BackgroundColor3 = self.theme.switchColor
-    switch.BorderSizePixel = 0
-    switch.Parent = container
-
-    local switchSlider = Instance.new("Frame")
-    switchSlider.Size = UDim2.new(0, 20, 1, -4)
-    switchSlider.Position = UDim2.new(0, 2, 0, 2)
-    switchSlider.BackgroundColor3 = self.theme.switchSliderColor
-    switchSlider.BorderSizePixel = 0
-    switchSlider.Parent = switch
-
-    local toggled = false
-    switch.MouseButton1Click:Connect(function()
-        toggled = not toggled
-        switch.BackgroundColor3 = toggled and self.theme.switchSliderOnColor or self.theme.switchColor
-        switchSlider.Position = toggled and UDim2.new(1, -22, 0, 2) or UDim2.new(0, 2, 0, 2)
-        switchSlider.BackgroundColor3 = toggled and self.theme.switchSliderOnColor or self.theme.switchSliderColor
-        callback(toggled)
-    end)
-
-    table.insert(self.objects, container)
-    self:updateNextPosition(size)
-    return container
-end
-
--- Create a slider
-function Nscripts:createSlider(size, min, max, step, callback)
-    local slider = Instance.new("Frame")
-    slider.Size = size
-    slider.Position = self.nextPosition
-    slider.BackgroundColor3 = self.theme.sliderColor
-    slider.BorderSizePixel = 0
-    slider.Parent = self.mainFrame
-
-    local handle = Instance.new("Frame")
-    handle.Size = UDim2.new(0, 20, 1, -4)
-    handle.Position = UDim2.new(0, 2, 0, 2)
-    handle.BackgroundColor3 = self.theme.sliderHandleColor
-    handle.BorderSizePixel = 0
-    handle.Parent = slider
-
-    local currentValue = min
-
-    local function updateHandlePosition(x)
-        local posX = math.clamp(x - slider.AbsolutePosition.X, 0, size.X.Offset)
-        handle.Position = UDim2.new(0, posX, 0, 0)
-        currentValue = math.floor((posX / size.X.Offset) * (max - min) / step + 0.5) * step + min
-        callback(currentValue)
+    for i, v in next, Children or {} do
+        v.Parent = Object
     end
-
-    slider.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            updateHandlePosition(input.Position.X)
-            local conn
-            conn = UserInputService.InputChanged:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseMovement then
-                    updateHandlePosition(input.Position.X)
-                end
-            end)
-            UserInputService.InputEnded:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                    conn:Disconnect()
-                end
-            end)
-        end
-    end)
-
-    table.insert(self.objects, slider)
-    self:updateNextPosition(size)
-    return slider
+    return Object
 end
 
--- Create a dropdown
-function Nscripts:createDropdown(size, options, callback)
-    local dropdown = Instance.new("TextButton")
-    dropdown.Size = size
-    dropdown.Position = self.nextPosition
-    dropdown.Text = "Select an option"
-    dropdown.TextColor3 = self.theme.textColor
-    dropdown.BackgroundColor3 = self.theme.buttonColor
-    dropdown.Font = self.theme.font
-    dropdown.TextSize = self.theme.textSize
-    dropdown.TextStrokeTransparency = 0.8
-    dropdown.Parent = self.mainFrame
+local function AddConnection(Signal, Function)
+    if not NscriptsLib:IsRunning() then
+        return
+    end
+    local SignalConnect = Signal:Connect(Function)
+    table.insert(NscriptsLib.Connections, SignalConnect)
+    return SignalConnect
+end
 
-    local dropdownFrame = Instance.new("Frame")
-    dropdownFrame.Size = UDim2.new(1, 0, 0, #options * size.Y.Offset)
-    dropdownFrame.Position = UDim2.new(0, 0, 1, 0)
-    dropdownFrame.BackgroundColor3 = self.theme.buttonColor
-    dropdownFrame.BorderSizePixel = 0
-    dropdownFrame.Visible = false
-    dropdownFrame.Parent = dropdown
+function NscriptsLib:IsRunning()
+    return Nscripts.Parent == game:GetService("CoreGui")
+end
 
-    for _, option in ipairs(options) do
-        local optionButton = Instance.new("TextButton")
-        optionButton.Size = UDim2.new(1, 0, 0, size.Y.Offset)
-        optionButton.BackgroundColor3 = self.theme.buttonColor
-        optionButton.Text = option
-        optionButton.TextColor3 = self.theme.textColor
-        optionButton.TextSize = self.theme.textSize
-        optionButton.Font = self.theme.font
-        optionButton.Parent = dropdownFrame
-
-        optionButton.MouseButton1Click:Connect(function()
-            dropdown.Text = option
-            dropdownFrame.Visible = false
-            callback(option)
+-- Make draggable function with smoother animations
+local function MakeDraggable(DragPoint, Main)
+    pcall(function()
+        local Dragging, DragInput, MousePos, FramePos = false
+        AddConnection(DragPoint.InputBegan, function(Input)
+            if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+                Dragging = true
+                MousePos = Input.Position
+                FramePos = Main.Position
+            end
         end)
-    end
+        AddConnection(DragPoint.InputChanged, function(Input)
+            if Input.UserInputType == Enum.UserInputType.MouseMovement then
+                DragInput = Input
+            end
+        end)
+        AddConnection(UserInputService.InputChanged, function(Input)
+            if Input == DragInput and Dragging then
+                local Delta = Input.Position - MousePos
+                TweenService:Create(Main, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                    Position = UDim2.new(FramePos.X.Scale, FramePos.X.Offset + Delta.X, FramePos.Y.Scale, FramePos.Y.Offset + Delta.Y)
+                }):Play()
+            end
+        end)
+    end)
+end
 
-    dropdown.MouseButton1Click:Connect(function()
-        dropdownFrame.Visible = not dropdownFrame.Visible
+-- Create elements using Orion library's design
+local function CreateElement(ElementName, ElementFunction)
+    NscriptsLib.Elements[ElementName] = function(...)
+        return ElementFunction(...)
+    end
+end
+
+-- Define UI elements
+CreateElement("Corner", function(Scale, Offset)
+    return Create("UICorner", {
+        CornerRadius = UDim.new(Scale or 0, Offset or 10)
+    })
+end)
+
+CreateElement("Stroke", function(Color, Thickness)
+    return Create("UIStroke", {
+        Color = Color or Color3.fromRGB(255, 255, 255),
+        Thickness = Thickness or 1
+    })
+end)
+
+CreateElement("List", function(Scale, Offset)
+    return Create("UIListLayout", {
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(Scale or 0, Offset or 0)
+    })
+end)
+
+CreateElement("Padding", function(Bottom, Left, Right, Top)
+    return Create("UIPadding", {
+        PaddingBottom = UDim.new(0, Bottom or 4),
+        PaddingLeft = UDim.new(0, Left or 4),
+        PaddingRight = UDim.new(0, Right or 4),
+        PaddingTop = UDim.new(0, Top or 4)
+    })
+end)
+
+CreateElement("TFrame", function()
+    return Create("Frame", {
+        BackgroundTransparency = 1
+    })
+end)
+
+CreateElement("Frame", function(Color)
+    return Create("Frame", {
+        BackgroundColor3 = Color or Color3.fromRGB(255, 255, 255),
+        BorderSizePixel = 0
+    })
+end)
+
+CreateElement("RoundFrame", function(Color, Scale, Offset)
+    return Create("Frame", {
+        BackgroundColor3 = Color or Color3.fromRGB(255, 255, 255),
+        BorderSizePixel = 0
+    }, {
+        Create("UICorner", {
+            CornerRadius = UDim.new(Scale, Offset)
+        })
+    })
+end)
+
+CreateElement("Button", function(Text, Size, Callback)
+    local Button = Create("TextButton", {
+        Text = Text or "",
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        BackgroundColor3 = Color3.fromRGB(50, 50, 50),
+        Size = Size or UDim2.new(0, 200, 0, 50),
+        Font = Enum.Font.Gotham,
+        TextSize = 16,
+        AutoButtonColor = false,
+        BorderSizePixel = 0
+    })
+    
+    AddConnection(Button.MouseButton1Click, Callback)
+    return Button
+end)
+
+CreateElement("Slider", function(Min, Max, Default, Callback)
+    local SliderFrame = Create("Frame", {
+        BackgroundColor3 = Color3.fromRGB(30, 30, 30),
+        Size = UDim2.new(0, 200, 0, 50)
+    })
+
+    local SliderBar = Create("Frame", {
+        BackgroundColor3 = Color3.fromRGB(50, 50, 50),
+        Size = UDim2.new(1, 0, 0, 10),
+        Position = UDim2.new(0, 0, 0.5, -5)
+    })
+
+    local SliderButton = Create("Frame", {
+        BackgroundColor3 = Color3.fromRGB(255, 0, 0),
+        Size = UDim2.new(0, 20, 0, 20),
+        Position = UDim2.new(0, Default, 0, -5)
+    }, {
+        Create("UICorner", {CornerRadius = UDim.new(0.5, 0)})
+    })
+
+    AddConnection(SliderButton.InputBegan, function(Input)
+        if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+            local Dragging = true
+            AddConnection(UserInputService.InputChanged, function(Input)
+                if Dragging and Input.UserInputType == Enum.UserInputType.MouseMovement then
+                    local MousePosition = Input.Position.X
+                    local SliderPosition = math.clamp(MousePosition - SliderFrame.AbsolutePosition.X, 0, SliderFrame.AbsoluteSize.X)
+                    SliderButton.Position = UDim2.new(0, SliderPosition, 0, -5)
+                    Callback((SliderPosition / SliderFrame.AbsoluteSize.X) * (Max - Min) + Min)
+                end
+            end)
+            AddConnection(UserInputService.InputEnded, function(Input)
+                if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+                    Dragging = false
+                end
+            end)
+        end
     end)
 
-    table.insert(self.objects, dropdown)
-    self:updateNextPosition(size)
-    return dropdown
+    return SliderFrame
+end)
+
+CreateElement("Toggle", function(Text, Default, Callback)
+    local ToggleFrame = Create("Frame", {
+        BackgroundColor3 = Color3.fromRGB(30, 30, 30),
+        Size = UDim2.new(0, 200, 0, 50)
+    })
+
+    local ToggleLabel = Create("TextLabel", {
+        Text = Text,
+        TextColor3 = Color3.fromRGB(240, 240, 240),
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, -50, 1, 0),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Font = Enum.Font.Gotham,
+        TextSize = 16
+    })
+
+    local ToggleButton = Create("TextButton", {
+        Text = "",
+        BackgroundColor3 = Default and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0),
+        Size = UDim2.new(0, 50, 1, 0),
+        BorderSizePixel = 0
+    })
+    
+    AddConnection(ToggleButton.MouseButton1Click, function()
+        Default = not Default
+        ToggleButton.BackgroundColor3 = Default and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+        Callback(Default)
+    end)
+
+    ToggleButton.Parent = ToggleFrame
+    ToggleLabel.Parent = ToggleFrame
+
+    return ToggleFrame
+end)
+
+-- Setup for NotificationHolder
+local NotificationHolder = Create("Frame", {
+    Position = UDim2.new(1, -25, 1, -25),
+    Size = UDim2.new(0, 300, 1, -25),
+    AnchorPoint = Vector2.new(1, 1),
+    BackgroundTransparency = 1
+}, {
+    Create("UIListLayout", {
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 5)
+    })
+})
+
+-- Add NotificationHolder to the main GUI
+NotificationHolder.Parent = game.CoreGui:FindFirstChild("Nscripts") or game.CoreGui
+
+-- Example usage
+local function TestGui()
+    local MainFrame = CreateElement("RoundFrame")(Color3.fromRGB(50, 50, 50), 0.1, 5)
+    MainFrame.Parent = NotificationHolder
+
+    local Button = CreateElement("Button")("Click Me", UDim2.new(0, 100, 0, 50), function()
+        print("Button clicked!")
+    end)
+    Button.Position = UDim2.new(0.5, -50, 0.5, -25)
+    Button.Parent = MainFrame
+
+    local Slider = CreateElement("Slider")(0, 100, 50, function(value)
+        print("Slider value: " .. value)
+    end)
+    Slider.Position = UDim2.new(0.5, -100, 0, 100)
+    Slider.Parent = MainFrame
+
+    local Toggle = CreateElement("Toggle")("Enable Feature", false, function(state)
+        print("Toggle state: " .. tostring(state))
+    end)
+    Toggle.Position = UDim2.new(0.5, -100, 0, 200)
+    Toggle.Parent = MainFrame
+
+    MakeDraggable(Button, MainFrame)
 end
 
--- Update the position for the next element
-function Nscripts:updateNextPosition(size)
-    self.nextPosition = self.nextPosition + UDim2.new(0, 0, 0, size.Y.Offset + 10)
-end
-
--- Change theme
-function Nscripts:setTheme(theme)
-    self.theme = theme or defaultTheme
-    for _, obj in ipairs(self.objects) do
-        if obj:IsA("TextLabel") or obj:IsA("TextButton") then
-            obj.TextColor3 = self.theme.textColor
-        elseif obj:IsA("Frame") then
-            obj.BackgroundColor3 = self.theme.buttonColor
-        end
-    end
-end
-
-return Nscripts
+TestGui()
